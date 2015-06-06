@@ -15,6 +15,21 @@
 (def ^:dynamic *cells-width* (/ *width* *cell-width*))
 (def ^:dynamic *cells-height* (/ *height* *cell-height*))
 
+;; gold/brown theme
+;(def background-rgb           [ 10  10 10 255])
+;(def grid-rgb                 [ 80  80 80 255])
+;(def center-cell-rgb          [200   0  0 255])
+;(def visible-non-blocking-rgb [101 100 20 255])
+;(def visible-blocking-rgb     [158 158 86 255])
+;(def invisible-blocking-rgb   [ 66  66 66 255])
+
+;; light theme
+(def background-rgb           [255 255 255 255])
+(def grid-rgb                 [210 210 250 255])
+(def center-cell-rgb          [  0  20  90 255])
+(def visible-non-blocking-rgb [181 190 220 255])
+(def visible-blocking-rgb     [118 118 146 255])
+(def invisible-blocking-rgb   [ 46  46  76 255])
 (def radius (atom 20))
 
 (def center [(/ *width* 2) (/ *height* 2)])
@@ -37,8 +52,8 @@
   empty-grid)
 
 (defn draw-grid [size]
-  (q/stroke 80)
-  (q/stroke-weight 1)
+  (apply q/stroke grid-rgb)
+  (q/stroke-weight 1.0)
   ;; draw vertical lines
   (doseq [x (range 0 *width* size)]
     (q/line x 0 x *height*))
@@ -280,18 +295,15 @@
 
 (defn draw [state]
   (q/color-mode :rgb 255 255 255)
-  (q/background 10)
-  (draw-grid 10)
-  (q/stroke 0)
-  (q/stroke-weight 0)
+  (apply q/background background-rgb)
 
   (let [diam 300
        [cx cy] center
        [ccx ccy] cell-center]
     ;; draw fine red circle over shaded cells
-    (q/stroke 200 0 0)
-    (q/fill 0 0 0 0)
-    (q/ellipse (+ 5 cx) (+ cy 5) diam diam)
+    #_(q/stroke 200 0 0)
+    #_(q/fill 0 0 0 0)
+    #_(q/ellipse (+ 5 cx) (+ cy 5) diam diam)
     (let [;c-points (points-in-circle ccx ccy 25)
           r (mod (int (/ (q/frame-count) 10)) 30)
           r @radius
@@ -316,10 +328,10 @@
           visible-points (set (remove nil? (trie->keys trie)))]
       ;(println "visible points" visible-points)
       ;; print visible cells
-      (q/fill 101 100 20 255)
+      (apply q/fill visible-non-blocking-rgb)
       (doseq [[x y] visible-points]
           ;(println "visible-point" x y)
-          (q/rect (* (+ x ccx) *cell-width*) (* (+ y ccy) *cell-height*) *cell-width* *cell-height*))
+          (q/rect (* (+ x ccx) *cell-width*) (* (+ y ccy) *cell-height*) (- *cell-width* 0.0) (- *cell-height* 0.0)))
       ;; shade cells to form circle
       #_(q/fill 90 180 90 255)
       #_(doseq [[x y] c-points]
@@ -327,7 +339,7 @@
         (q/rect (+ (* (+ x ccx) *cell-width*) 1)  (+ (* (+ y ccy) *cell-height*) 1)  9 9))
 
       ;; color middle cell red
-      (q/fill 200 0 0)
+      (apply q/fill center-cell-rgb)
       (q/rect cx cy 8 8)
 
       ;; draw blocking cells
@@ -335,20 +347,24 @@
         (doseq [[x cell] (map-indexed vector line)]
           (when cell
             (if (contains? visible-points [(- x ccx) (- y ccy)])
-              (q/fill 158 158 86 255)
-              (q/fill 66 66 66 255))
+              (apply q/fill visible-blocking-rgb)
+              (apply q/fill invisible-blocking-rgb))
             ;(println "Drawing rect" (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height* "for cell" cell)
             (q/rect (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height*))))
-    
+     
+      (draw-grid 10)
+      (q/stroke 0)
+      (q/stroke-weight 0)
         
       ;; print line segments
       ;(println "segments")
       ;(clojure.pprint/pprint (segments->tree segments))
-      #_(q/stroke-weight 2)
-      #_(q/color-mode :hsb num-segments 1.0 1.0)
-      #_(doseq [[idx segment] (map-indexed vector segments)]
+      (q/stroke-weight 1.5)
+      (q/color-mode :hsb num-segments 1.0 1.0)
+      (doseq [[idx segment] (map-indexed vector segments)]
         (doseq [[[x0 y0] [x1 y1]]  (partition 2 (-> (interleave segment segment) rest butlast))]
-          (q/stroke idx 1.0 0.7)
+          #_(q/stroke idx 1.0 0.7)
+          (q/stroke 0.1 0.2 0.3)
           (q/line (+ (* 10 x0) 5 cx)
                   (+ (* 10 y0) 5 cy)
                   (+ (* 10 x1) 5 cx)
