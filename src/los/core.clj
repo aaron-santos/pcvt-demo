@@ -46,11 +46,6 @@
 (def empty-grid
   (vec (repeat (/ *height* *cell-height*) (vec (repeat (/ *width* *cell-width*) false)))))
   
-(defn setup []
-  (q/smooth)
-  (q/frame-rate 60)
-  empty-grid)
-
 (def line-segment (memoize
   (fn
    [start end]
@@ -235,78 +230,74 @@
     (q/line 0 y *width* y))
   nil)
 
+(defn center-on-screen [points]
+  (let [[center-x center-y] cell-center]
+    (map (fn [[x y]] [(+ x center-x) (+ y center-y)]) points)))
+
 (defn draw-cells [xys color]
-  (apply q/background color)
+  (apply q/fill color)
   (doseq [[x y] xys]
     (q/rect (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height*)))
+
+(defn setup []
+  (q/smooth)
+  (q/frame-rate 60)
+  empty-grid)
 
 (defn draw [state]
   (q/color-mode :rgb 255 255 255)
   (apply q/background background-rgb)
-
   (let [diam 300
        [cx cy] center
-       [ccx ccy] cell-center]
-    ;; draw fine red circle over shaded cells
-    #_(q/stroke 200 0 0)
-    #_(q/fill 0 0 0 0)
-    #_(q/ellipse (+ 5 cx) (+ cy 5) diam diam)
-    (let [r @radius
-          ;c-points (circle-points ccx ccy (mod (int (/ (q/frame-count) 10)) 25))
-          trie         (get r->trie r)
-          ;_ (println "trie")
-          ;_ (clojure.pprint/pprint trie)
-          collision-points (set (map (fn [[x y]] [(- x ccx) (- y ccy)])
-                                     (collision-point-set state)))
-          ;_ (println "collision-points" collision-points)
-          trie         (log-time "cull-trie" (cull-trie collision-points trie))
-          segments (trie->paths trie)
-          num-segments (count segments)
-          ;_ (println "culled-trie" trie)
-          visible-points (set (remove nil? (trie->keys trie)))]
-      ;(println "visible points" visible-points)
-      ;; print visible cells
-      (apply q/fill visible-non-blocking-rgb)
-      (doseq [[x y] visible-points]
-          ;(println "visible-point" x y)
-          (q/rect (* (+ x ccx) *cell-width*) (* (+ y ccy) *cell-height*) (- *cell-width* 0.0) (- *cell-height* 0.0)))
-      ;; shade cells to form circle
-      #_(q/fill 90 180 90 255)
-      #_(doseq [[x y] c-points]
-        ;(println "perimeter cell" x y)
-        (q/rect (+ (* (+ x ccx) *cell-width*) 1)  (+ (* (+ y ccy) *cell-height*) 1)  9 9))
+       [ccx ccy] cell-center
+       r @radius
+       ;c-points (circle-points ccx ccy (mod (int (/ (q/frame-count) 10)) 25))
+       trie         (get r->trie r)
+       ;_ (println "trie")
+       ;_ (clojure.pprint/pprint trie)
+       collision-points (set (map (fn [[x y]] [(- x ccx) (- y ccy)])
+                                  (collision-point-set state)))
+       ;_ (println "collision-points" collision-points)
+       trie         (log-time "cull-trie" (cull-trie collision-points trie))
+       segments (trie->paths trie)
+       num-segments (count segments)
+       ;_ (println "culled-trie" trie)
+       visible-points (set (remove nil? (trie->keys trie)))]
+    ;(println "visible points" visible-points)
+    ;; print visible cells
+    (draw-cells (center-on-screen visible-points) visible-non-blocking-rgb)
 
-      ;; color middle cell red
-      (apply q/fill center-cell-rgb)
-      (q/rect cx cy 8 8)
+    ;; color middle cell red
+    (apply q/fill center-cell-rgb)
+    (q/rect cx cy 8 8)
 
-      ;; draw blocking cells
-      (doseq [[y line] (map-indexed vector state)]
-        (doseq [[x cell] (map-indexed vector line)]
-          (when cell
-            (if (contains? visible-points [(- x ccx) (- y ccy)])
-              (apply q/fill visible-blocking-rgb)
-              (apply q/fill invisible-blocking-rgb))
-            ;(println "Drawing rect" (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height* "for cell" cell)
-            (q/rect (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height*))))
-     
-      (draw-grid 10)
-      (q/stroke 0)
-      (q/stroke-weight 0)
-        
-      ;; print line segments
-      ;(println "segments")
-      ;(clojure.pprint/pprint (segments->tree segments))
-      (q/stroke-weight 1.5)
-      (q/color-mode :hsb num-segments 1.0 1.0)
-      (doseq [[idx segment] (map-indexed vector segments)]
-        (doseq [[[x0 y0] [x1 y1]]  (partition 2 (-> (interleave segment segment) rest butlast))]
-          #_(q/stroke idx 1.0 0.7)
-          (q/stroke 0.1 0.2 0.3)
-          (q/line (+ (* 10 x0) 5 cx)
-                  (+ (* 10 y0) 5 cy)
-                  (+ (* 10 x1) 5 cx)
-                  (+ (* 10 y1) 5 cy)))))))
+    ;; draw blocking cells
+    (doseq [[y line] (map-indexed vector state)]
+      (doseq [[x cell] (map-indexed vector line)]
+        (when cell
+          (if (contains? visible-points [(- x ccx) (- y ccy)])
+            (apply q/fill visible-blocking-rgb)
+            (apply q/fill invisible-blocking-rgb))
+          ;(println "Drawing rect" (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height* "for cell" cell)
+          (q/rect (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height*))))
+    
+    (draw-grid 10)
+    (q/stroke 0)
+    (q/stroke-weight 0)
+      
+    ;; print line segments
+    ;(println "segments")
+    ;(clojure.pprint/pprint (segments->tree segments))
+    (q/stroke-weight 1.5)
+    (q/color-mode :hsb num-segments 1.0 1.0)
+    (doseq [[idx segment] (map-indexed vector segments)]
+      (doseq [[[x0 y0] [x1 y1]]  (partition 2 (-> (interleave segment segment) rest butlast))]
+        #_(q/stroke idx 1.0 0.7)
+        (q/stroke 0.1 0.2 0.3)
+        (q/line (+ (* 10 x0) 5 cx)
+                (+ (* 10 y0) 5 cy)
+                (+ (* 10 x1) 5 cx)
+                (+ (* 10 y1) 5 cy))))))
 
 (defn on-click [state event]
   (let [{x :x y :y} event
