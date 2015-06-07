@@ -51,17 +51,6 @@
   (q/frame-rate 60)
   empty-grid)
 
-(defn draw-grid [size]
-  (apply q/stroke grid-rgb)
-  (q/stroke-weight 1.0)
-  ;; draw vertical lines
-  (doseq [x (range 0 *width* size)]
-    (q/line x 0 x *height*))
-  ;; draw horizontal lines
-  (doseq [y (range 0 *height* size)]
-    (q/line 0 y *width* y))
-  nil)
-
 (def line-segment (memoize
   (fn
    [start end]
@@ -84,46 +73,6 @@
               (Math/round y)
               (- (Math/round (- y))))]))
             (range (inc maxdiff))))))))
-
-
-(def line-segment-fast-without-endpoints (memoize
-  (fn [start end]
-    "(line-segment-fast [1 1] [5 4])"
-    (let [[ox oy] start
-          [dx dy] end]
-      (rest
-        (butlast
-          (map (fn [[x y]] [(+ ox x) (+ oy y)])
-               (line-segment [0 0] [(- dx ox) (- dy oy)]))))))))
-
-(defn circle-points [x0 y0 radius]
-  (letfn [(points [x y m]
-            (let [x+   (+ x0 x)
-                  x-   (- x0 x)
-                  y+   (+ y0 y)
-                  y-   (- y0 y)
-                  x0y+ (+ x0 y)
-                  x0y- (- x0 y)
-                  xy0+ (+ y0 x)
-                  xy0- (- y0 x)
-                  xys  [[x+ y+]
-                        [x+ y-]
-                        [x- y+]
-                        [x- y-]
-                        [x0y+ xy0+]
-                        [x0y+ xy0-]
-                        [x0y- xy0+]
-                        [x0y- xy0-]]
-                  [y m] (if (pos? m)
-                            [(dec y) (- m (* 8 y))]
-                            [y m])]
-                (if (<= x y)
-                 (concat xys
-                         (points (inc x)
-                                 y
-                                 (+ m 4 (* 8 x))))
-                 xys)))]
-    (points 0 radius (- 5 (* 4 radius)))))
 
 (defn square-points [x0 y0 radius]
   (letfn [(points [x y m]
@@ -160,10 +109,6 @@
                  xys)))]
     (points 0 radius (- 5 (* 4 radius)))))
 
-;(defn add-points [x0 y0 points]
-;  (reduce (fn [[x y]]
-;            (if (not-any? adjacent? points)
-
 (defn distance-sq
   [p1 p2]
   (let [sq (fn [x] (* x x))]
@@ -179,17 +124,6 @@
           (> (Math/abs (- y1 y2)) l))
     true
     (> (distance-sq {:x x1 :y y1} {:x x2 :y y2}) (* l l)))))
-
-(defn points-in-circle [x0 y0 radius]
-  (let [min-x (- x0 radius)
-        max-x (+ x0 radius)
-        min-y (- y0 radius)
-        max-y (+ y0 radius)]
-    (remove (fn [[x y]] (farther-than? x0 y0 x y radius))
-            (for [x (range min-x max-x)
-                  y (range min-y max-y)]
-              [x y]))))
-
 
 (defn remove-points-beyond-radius
   [x0 y0 r segments]
@@ -267,9 +201,6 @@
 
 ;(println (segments->tree (trie->paths {:a {:b {:c {} :d {}} :e { :f {} :g {}} :f {}}})))
 
-(def r->c-points
-  (apply hash-map (mapcat (fn [k] [k (circle-points 0 0 k)]) (range 30))))
-
 (def r->trie
   (apply hash-map (mapcat (fn [k]
                          (let [c-points (square-points 0 0 k)
@@ -293,6 +224,22 @@
               (when (get-in state [y x])
                 [x y])))))
 
+(defn draw-grid [size]
+  (apply q/stroke grid-rgb)
+  (q/stroke-weight 1.0)
+  ;; draw vertical lines
+  (doseq [x (range 0 *width* size)]
+    (q/line x 0 x *height*))
+  ;; draw horizontal lines
+  (doseq [y (range 0 *height* size)]
+    (q/line 0 y *width* y))
+  nil)
+
+(defn draw-cells [xys color]
+  (apply q/background color)
+  (doseq [[x y] xys]
+    (q/rect (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height*)))
+
 (defn draw [state]
   (q/color-mode :rgb 255 255 255)
   (apply q/background background-rgb)
@@ -304,17 +251,8 @@
     #_(q/stroke 200 0 0)
     #_(q/fill 0 0 0 0)
     #_(q/ellipse (+ 5 cx) (+ cy 5) diam diam)
-    (let [;c-points (points-in-circle ccx ccy 25)
-          r (mod (int (/ (q/frame-count) 10)) 30)
-          r @radius
+    (let [r @radius
           ;c-points (circle-points ccx ccy (mod (int (/ (q/frame-count) 10)) 25))
-          c-points (get r->c-points r)
-          ;_ (println "points-in-circle" c-points)
-          ;_ (println "circle-points" cc-points)
-          segments    (remove empty?
-                         (map (fn [[x y]]
-                                (line-segment [ccx ccy] [(+ x ccx) (+ y ccy)]))
-                              c-points))
           trie         (get r->trie r)
           ;_ (println "trie")
           ;_ (clojure.pprint/pprint trie)
