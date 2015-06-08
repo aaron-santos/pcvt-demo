@@ -134,6 +134,21 @@
           {}
           segments))
 
+(defn trie->zipper [exclude-subtrie? trie]
+  (z/zipper ; branch?
+             map?
+             ; children
+             (fn [node]
+               (reduce-kv (fn [children k subtree]
+                            (if (exclude-subtrie? k)
+                              children
+                              (conj children subtree)))
+                          []
+                          node))
+             ; make node
+             #(zipmap (keys %1) %2)
+             ; root
+             trie))
 
 (defn trie->paths [trie]
   (reduce
@@ -148,6 +163,9 @@
     (list)
     trie))
 
+(defn trie-zipper->paths [trie-zipper]
+  (trie->paths (z/node trie-zipper)))
+
 (defn replace-vals [kvs m]
   (reduce-kv (fn [r k v]
                (assoc r k (get kvs k v)))
@@ -155,16 +173,16 @@
              m))
 
 ;; cull subtries with parent keys in the set `exclude`.
-(defn cull-trie [exclude trie]
-  (let [replacement-nodes (zipmap exclude (repeat {}))]
-    (w/prewalk (fn [m] (if (and (map? m)
-                                (some #(contains? replacement-nodes %) (keys m)))
-                         (replace-vals replacement-nodes m)
-                         m))
-               trie)))
+;(defn cull-trie [exclude trie]
+;  (let [replacement-nodes (zipmap exclude (repeat {}))]
+;    (w/prewalk (fn [m] (if (and (map? m)
+;                                (some #(contains? replacement-nodes %) (keys m)))
+;                         (replace-vals replacement-nodes m)
+;                         m))
+;               trie)))
 
-(defn trie->keys [trie]
-  (loop [t  (z/zipper map? vals #(zipmap (keys %1) %2) trie)
+(defn trie-zipper->keys [trie-zipper]
+  (loop [t  trie-zipper
          ks #{}]
     (cond
       (z/end? t) ks
@@ -247,22 +265,27 @@
 (defn draw [state]
   (q/color-mode :rgb 255 255 255)
   (apply q/background background-rgb)
-  (let [diam 300
-       [cx cy] center
-       [ccx ccy] cell-center
-       r @radius
-       ;c-points (circle-points ccx ccy (mod (int (/ (q/frame-count) 10)) 25))
-       trie         (get r->trie r)
-       ;_ (println "trie")
-       ;_ (clojure.pprint/pprint trie)
-       collision-points (set (map (fn [[x y]] [(- x ccx) (- y ccy)])
-                                  (collision-point-set state)))
-       ;_ (println "collision-points" collision-points)
-       trie         (log-time "cull-trie" (cull-trie collision-points trie))
-       segments (trie->paths trie)
-       num-segments (count segments)
-       ;_ (println "culled-trie" trie)
-       visible-points (set (remove nil? (trie->keys trie)))]
+  (let [;; center of screen in pixels
+        [cx cy] center
+        ;; center of screen in cell-space
+        [ccx ccy] cell-center
+        ;; view distance
+        r @radius
+        ;; unculled visibility trie
+        trie   (get r->trie r)
+        #_#_ _ (println "trie")
+        #_#_ _ (clojure.pprint/pprint trie)
+        ;; collision points in player-cell-space
+        collision-points (set (map (fn [[x y]] [(- x ccx) (- y ccy)])
+                                   (collision-point-set state)))
+        #_#_ _ (println "collision-points" collision-points)
+        ;; culled visibility trie zipper
+        tz       (trie->zipper (fn [xy] (contains? collision-points xy)) trie)
+        ;; culled trie segments in player-cell-space
+        segments (trie-zipper->paths tz)
+        num-segments (count segments)
+        #_#_ _ (println "culled-trie" tz)
+        visible-points (set (remove nil? (trie-zipper->keys tz)))]
     ;(println "visible points" visible-points)
     ;; print visible cells
     (draw-cells (center-on-screen visible-points) visible-non-blocking-rgb)
@@ -357,8 +380,14 @@
                                        [(- x cx) (- y cy)])
                                      (collision-point-set state)))
           ;_ (println "collision-points" collision-points)
-          trie         (cull-trie collision-points trie)
-          visible-points (set (remove nil? (trie->keys trie)))]
+          ;trie         (cull-trie collision-points trie)
+          ;visible-points (set (remove nil? (trie->keys trie)))]
+          tz       (trie->zipper (fn [xy] (contains? collision-points xy)) trie)
+          ;; culled trie segments in player-cell-space
+          segments (trie-zipper->paths tz)
+          num-segments (count segments)
+          #_#_ _ (println "culled-trie" tz)
+          visible-points (set (remove nil? (trie-zipper->keys tz)))]
       ;(println "xy" [x y])
       ;(println "cx cy" [cx cy])
       ;(println "visible points" visible-points)
