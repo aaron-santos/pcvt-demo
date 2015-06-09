@@ -164,13 +164,49 @@
     trie))
 
 (defn trie-zipper->paths [trie-zipper]
-  (trie->paths (z/node trie-zipper)))
+  (reduce
+    (fn [paths [k subtrie]]
+      (if (empty? subtrie)
+        (conj paths (list k))
+        (concat
+          paths
+          (map (fn [path]
+                 (cons k path))
+                 (trie->paths subtree)))))
+    (list)
+    (z/children trie-zipper)))
 
 (defn replace-vals [kvs m]
   (reduce-kv (fn [r k v]
                (assoc r k (get kvs k v)))
              {}
              m))
+
+(defn map-zipper [m]
+  (z/zipper
+    (fn [x] (or (map? x) (map? (second x))))
+    (fn [x] (seq (if (map? x) (map vec x) (second x))))
+    (fn [x children]
+      (if (map? x)
+        (into {} children)
+        (assoc x 1 (into {} children))))
+    m))
+
+(defn trie-zipper->paths [trie-zipper]
+  (loop [t     (z/next trie-zipper)
+         paths #{}]
+    (cond
+      (z/end? t)
+         paths
+      (empty? (z/node t))
+        (recur (z/next t) paths)
+      (z/branch? t)
+        (if (empty? (second (z/node t)))
+          (let [path (->> t z/path rest (map first))]
+            (recur (z/next t) (conj paths (conj (vec path) (first (z/node t))))))
+          (recur (z/next t) paths))
+      :leaf
+        (println "got leaf" (z/node t)))))
 
 ;; cull subtries with parent keys in the set `exclude`.
 ;(defn cull-trie [exclude trie]
