@@ -135,20 +135,25 @@
           segments))
 
 (defn trie->zipper [exclude-subtrie? trie]
-  (z/zipper ; branch?
-             map?
-             ; children
-             (fn [node]
-               (reduce-kv (fn [children k subtree]
-                            (if (exclude-subtrie? k)
-                              children
-                              (conj children subtree)))
-                          []
-                          node))
-             ; make node
-             #(zipmap (keys %1) %2)
-             ; root
-             trie))
+  (z/zipper
+    ; branch?
+    (fn [x] (or (map? x) (map? (second x))))
+    ; children
+    (fn [x] (seq 
+              (reduce (fn [children [k subtree]]
+                           (if (exclude-subtrie? k)
+                                          (conj children [k {}])
+                                          (conj children [k subtree])))
+                         []
+                         (if (map? x)
+                              (map vec x)
+                              (second x)))))
+    ; make node
+    (fn [x children]
+      (if (map? x)
+        (into {} children)
+        (assoc x 1 (into {} children))))
+    trie))
 
 (defn trie->paths [trie]
   (reduce
@@ -163,34 +168,11 @@
     (list)
     trie))
 
-(defn trie-zipper->paths [trie-zipper]
-  (reduce
-    (fn [paths [k subtrie]]
-      (if (empty? subtrie)
-        (conj paths (list k))
-        (concat
-          paths
-          (map (fn [path]
-                 (cons k path))
-                 (trie->paths subtree)))))
-    (list)
-    (z/children trie-zipper)))
-
 (defn replace-vals [kvs m]
   (reduce-kv (fn [r k v]
                (assoc r k (get kvs k v)))
              {}
              m))
-
-(defn map-zipper [m]
-  (z/zipper
-    (fn [x] (or (map? x) (map? (second x))))
-    (fn [x] (seq (if (map? x) (map vec x) (second x))))
-    (fn [x children]
-      (if (map? x)
-        (into {} children)
-        (assoc x 1 (into {} children))))
-    m))
 
 (defn trie-zipper->paths [trie-zipper]
   (loop [t     (z/next trie-zipper)
@@ -208,47 +190,16 @@
       :leaf
         (println "got leaf" (z/node t)))))
 
-;; cull subtries with parent keys in the set `exclude`.
-;(defn cull-trie [exclude trie]
-;  (let [replacement-nodes (zipmap exclude (repeat {}))]
-;    (w/prewalk (fn [m] (if (and (map? m)
-;                                (some #(contains? replacement-nodes %) (keys m)))
-;                         (replace-vals replacement-nodes m)
-;                         m))
-;               trie)))
-
 (defn trie-zipper->keys [trie-zipper]
-  (loop [t  trie-zipper
+  (loop [t  (z/next trie-zipper)
          ks #{}]
     (cond
       (z/end? t) ks
       (empty? (z/node t)) (recur (z/next t) ks)
-      (z/branch? t) (let [new-keys (keys (z/node t))]
-        (recur (z/next t) (reduce conj ks new-keys)))
+      (z/branch? t) (let [new-key (first (z/node t))]
+        (recur (z/next t) (conj ks new-key)))
       :leaf
       (println "got leaf" (z/node t)))))
-
-#_(defn trie->keys [trie]
-  (loop [t  (z/zipper map? vals #(zipmap (keys %1) %2) trie)
-         ks (transient #{})]
-    (cond
-      (z/end? t) (persistent! ks)
-      (empty? (z/node t)) (recur (z/next t) ks)
-      (z/branch? t) (let [new-keys (keys (z/node t))]
-        (recur (z/next t) (reduce conj! ks new-keys)))
-      :leaf
-      (println "got leaf" (z/node t)))))
-
-;;(println "(trie->paths {:a {}})")
-;;(println (trie->paths {:a {}}))
-;;(println "(trie->paths {:a {:b {}}})")
-;;(println (trie->paths {:a {:b {}}}))
-;;(println "(trie->paths {:a {:b {:c {}}}})")
-;;(println (trie->paths {:a {:b {:c {}}}}))
-;;(println "(trie->paths {:a {:b {:c {} :d {}} :e { :f {} :g {}} :f {}}})")
-;;(println (trie->paths {:a {:b {:c {} :d {}} :e { :f {} :g {}} :f {}}}))
-
-;(println (segments->tree (trie->paths {:a {:b {:c {} :d {}} :e { :f {} :g {}} :f {}}})))
 
 (def r->trie
   (apply hash-map (mapcat (fn [k]
@@ -322,7 +273,6 @@
         num-segments (count segments)
         #_#_ _ (println "culled-trie" tz)
         visible-points (set (remove nil? (trie-zipper->keys tz)))]
-    ;(println "visible points" visible-points)
     ;; print visible cells
     (draw-cells (center-on-screen visible-points) visible-non-blocking-rgb)
 
@@ -345,8 +295,6 @@
     (q/stroke-weight 0)
       
     ;; print line segments
-    ;(println "segments")
-    ;(clojure.pprint/pprint (segments->tree segments))
     (q/stroke-weight 1.5)
     (q/color-mode :hsb num-segments 1.0 1.0)
     (doseq [[idx segment] (map-indexed vector segments)]
@@ -415,19 +363,11 @@
           collision-points (set (map (fn [[x y]]
                                        [(- x cx) (- y cy)])
                                      (collision-point-set state)))
-          ;_ (println "collision-points" collision-points)
-          ;trie         (cull-trie collision-points trie)
-          ;visible-points (set (remove nil? (trie->keys trie)))]
           tz       (trie->zipper (fn [xy] (contains? collision-points xy)) trie)
           ;; culled trie segments in player-cell-space
           segments (trie-zipper->paths tz)
           num-segments (count segments)
-          #_#_ _ (println "culled-trie" tz)
           visible-points (set (remove nil? (trie-zipper->keys tz)))]
-      ;(println "xy" [x y])
-      ;(println "cx cy" [cx cy])
-      ;(println "visible points" visible-points)
-      ;(contains? visible-points [x y])
       visible-points)))
 
 (defn print-symmetry [state]
