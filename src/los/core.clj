@@ -15,6 +15,12 @@
 (def ^:dynamic *cells-width* (/ *width* *cell-width*))
 (def ^:dynamic *cells-height* (/ *height* *cell-height*))
 
+(def radius (atom 20))
+; one of :hide :show :strobe
+(def path-mode (atom :hide))
+(def next-path-mode {:hdie :show
+                     :show :strobe
+                     :strobe :hide})
 ;; gold/brown theme
 ;(def background-rgb           [ 10  10 10 255])
 ;(def grid-rgb                 [ 80  80 80 255])
@@ -30,7 +36,6 @@
 (def visible-non-blocking-rgb [181 190 220 255])
 (def visible-blocking-rgb     [118 118 146 255])
 (def invisible-blocking-rgb   [ 46  46  76 255])
-(def radius (atom 20))
 
 (def center [(/ *width* 2) (/ *height* 2)])
 (def cell-center [(/ *width* 2 *cell-width*) (/ *height* 2 *cell-height*)])
@@ -433,6 +438,9 @@
            state)
     :- (do (swap! radius dec)
            (println "New Radius" @radius)
+           state)
+    :p (do (swap! path-mode (get next-path-mode @path-mode))
+           (println "New path mode" @path-mode)
            state)
     state))
 
