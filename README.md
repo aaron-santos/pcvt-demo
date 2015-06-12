@@ -4,9 +4,10 @@ A Clojure library designed to demonstrate pre-computed visibility tries.
 
 ## Usage
 
-Requires leiningen.
-
+Clone and run with leiningen.
 `lein run`
+
+Or download and run the standalone <a href="https://github.com/aaron-santos/pcvt-demo/raw/master/los-0.1.0-SNAPSHOT-standalone.jar">jar</a>.
 
 ## Key bindings
 
