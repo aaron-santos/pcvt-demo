@@ -11,14 +11,20 @@ Requires leiningen.
 ## Key bindings
 
 `n` Near pillar demo.
+
 `a` Away pillar demo.
+
 `c` Corner peeking demo.
+
 `d` Diagonal walls demo.
+
 `r` Place random blocking cells.
-`s` Print symmetry information about the current state to stdout.
-`S` Iterate 100 times aggregating symmetry information and print to stdout.
+
 `+` Increase view distance.
+
 `-` Decrease view distance.
+
+`p` Cycle path display mode between `none`, `all`, and `strobe`.
 
 Use mouse to toggle blocking cells.
 
