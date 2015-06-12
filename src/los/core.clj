@@ -17,8 +17,8 @@
 
 (def radius (atom 20))
 ; one of :hide :show :strobe
-(def path-mode (atom :hide))
-(def next-path-mode {:hdie :show
+(def path-mode (atom :hide :validator #(contains? #{:hide :show :strobe} %)))
+(def next-path-mode {:hide :show
                      :show :strobe
                      :strobe :hide})
 ;; gold/brown theme
@@ -140,6 +140,22 @@
           segments))
 
 (defn trie->zipper [exclude-subtrie? trie]
+  (z/zipper ; branch?
+             map?
+             ; children
+             (fn [node]
+               (reduce-kv (fn [children k subtree]
+                            (if (exclude-subtrie? k)
+                              children
+                              (conj children subtree)))
+                          []
+                          node))
+             ; make node
+             #(zipmap (keys %1) %2)
+             ; root
+             trie))
+
+(defn trie->zipper-ext [exclude-subtrie? trie]
   (z/zipper
     ; branch?
     (fn [x] (or (map? x) (map? (second x))))
@@ -173,13 +189,11 @@
     (list)
     trie))
 
-(defn replace-vals [kvs m]
-  (reduce-kv (fn [r k v]
-               (assoc r k (get kvs k v)))
-             {}
-             m))
+;;;;;;;;;;;;;;;;;
+;; No trie-zipper->paths. It is not possible/sane to do this.
+;;;;;;;;;;;;;;;;;
 
-(defn trie-zipper->paths [trie-zipper]
+(defn trie-zipper-ext->paths [trie-zipper]
   (loop [t     (z/next trie-zipper)
          paths #{}]
     (cond
@@ -196,6 +210,17 @@
         (println "got leaf" (z/node t)))))
 
 (defn trie-zipper->keys [trie-zipper]
+  (loop [t  trie-zipper
+         ks #{}]
+    (cond
+      (z/end? t) ks
+      (empty? (z/node t)) (recur (z/next t) ks)
+      (z/branch? t) (let [new-keys (keys (z/node t))]
+        (recur (z/next t) (reduce conj ks new-keys)))
+      :leaf
+      (println "got leaf" (z/node t)))))
+
+(defn trie-zipper-ext->keys [trie-zipper]
   (loop [t  (z/next trie-zipper)
          ks #{}]
     (cond
@@ -272,12 +297,15 @@
                                    (collision-point-set state)))
         #_#_ _ (println "collision-points" collision-points)
         ;; culled visibility trie zipper
-        tz       (trie->zipper (fn [xy] (contains? collision-points xy)) trie)
-        ;; culled trie segments in player-cell-space
-        segments (trie-zipper->paths tz)
-        num-segments (count segments)
+        tz     (case @path-mode
+                 :hide   (trie->zipper     (fn [xy] (contains? collision-points xy)) trie)
+                 :show   (trie->zipper-ext (fn [xy] (contains? collision-points xy)) trie)
+                 :strobe (trie->zipper-ext (fn [xy] (contains? collision-points xy)) trie))
         #_#_ _ (println "culled-trie" tz)
-        visible-points (set (remove nil? (trie-zipper->keys tz)))]
+        visible-points (set (remove nil? (case @path-mode
+                                           :hide   (trie-zipper->keys tz)
+                                           :show   (trie-zipper-ext->keys tz)
+                                           :strobe (trie-zipper-ext->keys tz))))]
     ;; print visible cells
     (draw-cells (center-on-screen visible-points) visible-non-blocking-rgb)
 
@@ -296,20 +324,24 @@
           (q/rect (* x *cell-width*) (* y *cell-height*) *cell-width* *cell-height*))))
     
     (draw-grid 10)
-    (q/stroke 0)
-    (q/stroke-weight 0)
+    (q/stroke 0.1 0.2 0.3)
+    (q/stroke-weight 1.5)
       
     ;; print line segments
-    (q/stroke-weight 1.5)
-    (q/color-mode :hsb num-segments 1.0 1.0)
-    (doseq [[idx segment] (map-indexed vector segments)]
-      (doseq [[[x0 y0] [x1 y1]]  (partition 2 (-> (interleave segment segment) rest butlast))]
-        #_(q/stroke idx 1.0 0.7)
-        (q/stroke 0.1 0.2 0.3)
-        (q/line (+ (* 10 x0) 5 cx)
-                (+ (* 10 y0) 5 cy)
-                (+ (* 10 x1) 5 cx)
-                (+ (* 10 y1) 5 cy))))))
+    (when (contains? #{:show :strobe} @path-mode)
+      (let [;; culled trie segments in player-cell-space
+            segments (trie-zipper-ext->paths tz)
+            num-segments (count segments)]
+        (q/color-mode :hsb num-segments 1.0 1.0)
+        (doseq [[idx segment] (map-indexed vector segments)]
+          (when (or (= @path-mode :show)
+                    (and (= (@path-mode :strobe))
+                         (= idx (mod (long (/ (q/frame-count) 10)) num-segments))))
+            (doseq [[[x0 y0] [x1 y1]]  (partition 2 (-> (interleave segment segment) rest butlast))]
+              (q/line (+ (* 10 x0) 5 cx)
+                      (+ (* 10 y0) 5 cy)
+                      (+ (* 10 x1) 5 cx)
+                      (+ (* 10 y1) 5 cy)))))))))
 
 (defn on-click [state event]
   (let [{x :x y :y} event
@@ -370,8 +402,6 @@
                                      (collision-point-set state)))
           tz       (trie->zipper (fn [xy] (contains? collision-points xy)) trie)
           ;; culled trie segments in player-cell-space
-          segments (trie-zipper->paths tz)
-          num-segments (count segments)
           visible-points (set (remove nil? (trie-zipper->keys tz)))]
       visible-points)))
 
@@ -439,7 +469,7 @@
     :- (do (swap! radius dec)
            (println "New Radius" @radius)
            state)
-    :p (do (swap! path-mode (get next-path-mode @path-mode))
+    :p (do (swap! path-mode (fn [path-mode] (get next-path-mode path-mode)))
            (println "New path mode" @path-mode)
            state)
     state))
