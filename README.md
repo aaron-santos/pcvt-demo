@@ -28,6 +28,8 @@ Requires leiningen.
 
 Use mouse to toggle blocking cells.
 
+<img src="http://i.imgur.com/K2T2yqn.png" />
+
 ## License
 
 Distributed under the MIT license.
